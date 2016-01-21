@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>{{ .Title }}</title>
+
+    <!-- Bootstrap -->
+    <link href="public/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="public/dropzone.css" rel="stylesheet">
+    <script src="public/dropzone.js"></script>
+<script>
+Dropzone.options.myAwesomeDropzone = { // The camelized version of the ID of the form element
+
+  // The configuration we've talked about above
+  url: "upload",
+  autoProcessQueue: false,
+  uploadMultiple: true,
+  parallelUploads: 100,
+  maxFiles: 100,
+  addRemoveLinks: true,
+
+  // The setting up of the dropzone
+  init: function() {
+    var myDropzone = this;
+
+    // First change the button to actually tell Dropzone to process the queue.
+    this.element.querySelector("button[type=submit]").addEventListener("click", function(e) {
+      // Make sure that the form isn't actually being sent.
+      //e.preventDefault();
+      e.stopPropagation();
+      myDropzone.processQueue();
+    });
+
+    // Listen to the sendingmultiple event. In this case, it's the sendingmultiple event instead
+    // of the sending event because uploadMultiple is set to true.
+    this.on("sendingmultiple", function() {
+      // Gets triggered when the form is actually being sent.
+      // Hide the success button or the complete form.
+    });
+    this.on("successmultiple", function(files, response) {
+      // Gets triggered when the files have successfully been sent.
+      // Redirect user or notify of success.
+    });
+    this.on("errormultiple", function(files, response) {
+      // Gets triggered when there was an error sending the files.
+      // Maybe show form again, and notify user of error
+    });
+  }
+
+}
+</script>
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <h1>Hello, world!</h1>
+
+
+    <form id="my-awesome-dropzone" class="dropzone">
+            <input type="text" name="pid" value="tesing"/>
+            <button class="btn btn-primary" type="submit">Submit</button>
+    </form>
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="public/bootstrap/js/bootstrap.min.js"></script>
+  </body>
+</html>
