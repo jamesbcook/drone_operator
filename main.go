@@ -1,103 +1,140 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
-	"io"
+	"html/template"
 	"log"
 	"net/http"
-	"os"
 	"runtime"
+	"strings"
+
+	"github.com/b00stfr3ak/drone_operator/drone"
+	"github.com/gorilla/sessions"
 )
 
 const (
-	binDir string = "./bin/"
-	help   string = ` Options:
-	drone_operator -setup
-	drone_operator -run -host <ip> -port <port>
+	help string = `Usage:
+	drone_operator -host <ip> -port <port>
 	`
 )
 
-var runningOS string
+var (
+	store     = sessions.NewCookieStore([]byte("98F#FG2u27Yypb#^9qBfEZ!sK^6O5v#1"))
+	runningOS string
+)
 
 type flagOpts struct {
-	setup bool
-	run   bool
-	host  string
-	port  int
-	help  bool
+	host string
+	port int
+	help bool
 }
 
-func binDirExists() bool {
-	_, err := os.Stat(binDir)
+//Page struct includes data to fill out HTML pages
+type Page struct {
+	Title   string
+	Alert   interface{}
+	Message string
+}
+
+func processFile(settings *drone.Settings, data []byte) error {
+	var project drone.Project
+	n, err := drone.ParseNmap(data)
 	if err == nil {
-		return true
+		nmap := &drone.Nmap{Settings: *settings, Parsed: n}
+		project = nmap
+	} else if err != nil {
+		n, err := drone.ParseNessus(data)
+		if err == nil {
+			nessus := &drone.Nessus{Settings: *settings, Parsed: n}
+			project = nessus
+		} else if err != nil {
+			log.Println(err)
+		}
 	}
-	return false
-}
-
-func binDirMake() {
-	err := os.Mkdir(binDir, 0775)
+	p, err := project.Build(settings.ProjectID, settings.Tags)
 	if err != nil {
-		log.Fatal("Can't make dir", err)
+		log.Println(err)
 	}
+	return drone.Import(p)
 }
 
-func createURL(binary, version string) string {
-	var file string
-	switch runningOS {
-	case "windows":
-		file = fmt.Sprintf("drone-%s_windows_amd64.exe", binary)
-	case "linux":
-		file = fmt.Sprintf("drone-%s_linux_amd64", binary)
-	case "darwin":
-		file = fmt.Sprintf("drone-%s_darwin_amd64", binary)
+func upload(w http.ResponseWriter, r *http.Request) {
+	session, err := store.Get(r, "flash-session")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	url := fmt.Sprintf("https://github.com/lair-framework/drone-%s/releases/download/v%s/%s", binary, version, file)
-	return url
+	err = r.ParseMultipartForm(0)
+	if err != nil {
+		log.Println("ParseMultipartForm error:", err)
+		return
+	}
+	pid := r.FormValue("pid")
+	tags := r.FormValue("tags")
+	hostTags := []string{}
+	if tags != "" {
+		hostTags = strings.Split(tags, ",")
+	}
+	settings := &drone.Settings{ProjectID: pid, Tags: hostTags}
+	for _, fheaders := range r.MultipartForm.File {
+		for _, header := range fheaders {
+			f, err := header.Open()
+			if err != nil {
+				log.Println("file open error", err)
+				continue
+			}
+			var buff bytes.Buffer
+			buff.ReadFrom(f)
+			f.Close()
+			err = processFile(settings, buff.Bytes())
+			if err != nil {
+				log.Println(err, header.Filename)
+				session.AddFlash("alert alert-error", "message")
+			} else {
+				log.Println(header.Filename, " Upload Successful")
+				session.AddFlash("alert alert-success", "message")
+			}
+		}
+	}
+	session.Save(r, w)
+	http.Redirect(w, r, "/", 302)
 }
 
-func setup() {
-	res := binDirExists()
-	if res == false {
-		binDirMake()
+func index(w http.ResponseWriter, r *http.Request) {
+	session, err := store.Get(r, "flash-session")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	binaries := map[string]string{
-		"blacksheepwall": "2.0.0",
-		"nmap":           "2.1.0",
-		"nessus":         "2.1.0",
+	p := &Page{Title: "Upload Page"}
+	fm := session.Flashes("message")
+	for _, m := range fm {
+		p.Alert = m
 	}
-	for binary, version := range binaries {
-		fmt.Println("Downloading", binary)
-		url := createURL(binary, version)
-		downloadLocation := fmt.Sprintf("%s/%s", binDir, binary)
-		out, err := os.Create(downloadLocation)
-		if err != nil {
-			fmt.Println("Error creating", binary)
-		}
-		defer out.Close()
-		resp, err := http.Get(url)
-		if err != nil {
-			fmt.Println("Error Getting Package", binary, err)
-		}
-		defer resp.Body.Close()
-		_, err = io.Copy(out, resp.Body)
-		err = os.Chmod(downloadLocation, 0775)
-		if err != nil {
-			fmt.Println(err)
-		}
+	t, _ := template.ParseFiles("app/views/index/index.html")
+	session.Save(r, w)
+	t.Execute(w, p)
+}
+
+func run(host string, port int) {
+	server := fmt.Sprintf("%s:%d", host, port)
+	fs := http.FileServer(http.Dir("public/"))
+	http.Handle("/public/", http.StripPrefix("/public/", fs))
+	http.HandleFunc("/", index)
+	http.HandleFunc("/upload", upload)
+	err := http.ListenAndServe(server, nil)
+	if err != nil {
+		fmt.Println(err)
 	}
 }
 
 func flags() *flagOpts {
-	setupOpt := flag.Bool("setup", false, "Run Setup")
-	runOpt := flag.Bool("run", false, "Start Server")
 	hostOpt := flag.String("host", "localhost", "Host for Server")
 	portOpt := flag.Int("port", 8080, "Port for Server")
 	helpOpt := flag.Bool("help", false, "Print Help")
 	flag.Parse()
-	return &flagOpts{setup: *setupOpt, run: *runOpt,
-		host: *hostOpt, port: *portOpt, help: *helpOpt}
+	return &flagOpts{host: *hostOpt, port: *portOpt,
+		help: *helpOpt}
 }
 
 func init() {
@@ -106,15 +143,9 @@ func init() {
 
 func main() {
 	options := flags()
-	if options.setup {
-		setup()
-	} else if options.run {
-
-	} else if options.help {
+	if options.help {
 		fmt.Println(help)
 	} else {
-		fmt.Println("No Options Set")
-		fmt.Println(help)
-		os.Exit(1)
+		run(options.host, options.port)
 	}
 }
