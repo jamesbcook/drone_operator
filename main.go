@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"runtime"
 	"strings"
 
 	"github.com/b00stfr3ak/drone_operator/drone"
@@ -21,8 +20,7 @@ const (
 )
 
 var (
-	store     = sessions.NewCookieStore([]byte("98F#FG2u27Yypb#^9qBfEZ!sK^6O5v#1"))
-	runningOS string
+	store = sessions.NewCookieStore([]byte("98F#FG2u27Yypb#^9qBfEZ!sK^6O5v#1"))
 )
 
 type flagOpts struct {
@@ -34,8 +32,8 @@ type flagOpts struct {
 //Page struct includes data to fill out HTML pages
 type Page struct {
 	Title   string
-	Alert   interface{}
-	Message string
+	Alert   map[string][]interface{}
+	Message bool
 }
 
 func processFile(settings *drone.Settings, data []byte) error {
@@ -65,7 +63,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	err = r.ParseMultipartForm(0)
+	err = r.ParseMultipartForm(10 << 20)
 	if err != nil {
 		log.Println("ParseMultipartForm error:", err)
 		return
@@ -89,11 +87,13 @@ func upload(w http.ResponseWriter, r *http.Request) {
 			f.Close()
 			err = processFile(settings, buff.Bytes())
 			if err != nil {
-				log.Println(err, header.Filename)
-				session.AddFlash("alert alert-error", "message")
+				errmsg := fmt.Sprintf("%s: %s", err, header.Filename)
+				log.Println(errmsg)
+				session.AddFlash(errmsg, "alert alert-danger")
 			} else {
-				log.Println(header.Filename, " Upload Successful")
-				session.AddFlash("alert alert-success", "message")
+				goodmsg := fmt.Sprintf("Upload Successful %s", header.Filename)
+				log.Println(goodmsg)
+				session.AddFlash(goodmsg, "alert alert-success")
 			}
 		}
 	}
@@ -107,9 +107,16 @@ func index(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	p := &Page{Title: "Upload Page"}
-	fm := session.Flashes("message")
-	for _, m := range fm {
-		p.Alert = m
+	bm := session.Flashes("alert alert-danger")
+	gm := session.Flashes("alert alert-success")
+	p.Alert = make(map[string][]interface{})
+	if len(bm) > 0 {
+		p.Message = true
+		p.Alert["alert alert-danger"] = bm
+	}
+	if len(gm) > 0 {
+		p.Message = true
+		p.Alert["alert alert-success"] = gm
 	}
 	t, _ := template.ParseFiles("app/views/index/index.html")
 	session.Save(r, w)
@@ -122,9 +129,10 @@ func run(host string, port int) {
 	http.Handle("/public/", http.StripPrefix("/public/", fs))
 	http.HandleFunc("/", index)
 	http.HandleFunc("/upload", upload)
+	log.Println("Starting Server at", server)
 	err := http.ListenAndServe(server, nil)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 }
 
@@ -135,10 +143,6 @@ func flags() *flagOpts {
 	flag.Parse()
 	return &flagOpts{host: *hostOpt, port: *portOpt,
 		help: *helpOpt}
-}
-
-func init() {
-	runningOS = runtime.GOOS
 }
 
 func main() {
