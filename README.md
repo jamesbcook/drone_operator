@@ -13,3 +13,8 @@ The server will determin what kind of file it is and correcly parse it and uploa
 * alert alert-danger for a unsuccessful upload and it will tell you what the error is
 
 All flashes can either be closed manually or will fade-out on their own
+
+###Thanks To:
+
+@tomsteele
+@djkottmann
