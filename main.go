@@ -139,10 +139,11 @@ func run(host string, port int) {
 func flags() *flagOpts {
 	hostOpt := flag.String("host", "localhost", "Host for Server")
 	portOpt := flag.Int("port", 8080, "Port for Server")
-	helpOpt := flag.Bool("help", false, "Print Help")
+	flag.Usage = func() {
+		fmt.Println(help)
+	}
 	flag.Parse()
-	return &flagOpts{host: *hostOpt, port: *portOpt,
-		help: *helpOpt}
+	return &flagOpts{host: *hostOpt, port: *portOpt}
 }
 
 func main() {
