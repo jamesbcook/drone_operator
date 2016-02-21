@@ -48,7 +48,13 @@ func processFile(settings *drone.Settings, data []byte) error {
 			nessus := &drone.Nessus{Settings: *settings, Parsed: n}
 			project = nessus
 		} else if err != nil {
-			log.Println(err)
+			b, err := drone.ParseBurp(data)
+			if err == nil {
+				burp := &drone.Burp{Settings: *settins, Parsed: b}
+				project = burp
+			} else if err != nil {
+				log.Println(err)
+			}
 		}
 	}
 	p, err := project.Build(settings.ProjectID, settings.Tags)
