@@ -9,13 +9,13 @@ import (
 
 //Nmap Struct holds parsed xml data along with the settings struct
 type Nmap struct {
-	Settings Settings
-	Parsed   *nmap.NmapRun
+	Settings
+	Parsed *nmap.NmapRun
 }
 
 //ParseNmap File
-func ParseNmap(data []byte) (n *nmap.NmapRun, err error) {
-	n, err = nmap.Parse(data)
+func ParseNmap(data []byte) (*nmap.NmapRun, error) {
+	n, err := nmap.Parse(data)
 	if err != nil {
 		return nil, err
 	} else if n.Version == "" {

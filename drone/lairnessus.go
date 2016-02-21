@@ -13,18 +13,13 @@ import (
 
 //Nessus Struct holds parsed xml data along with the settings struct
 type Nessus struct {
-	Settings Settings
-	Parsed   *nessus.NessusData
-}
-
-type hostMap struct {
-	Hosts         map[string]bool
-	Vulnerability *lair.Issue
+	Settings
+	Parsed *nessus.NessusData
 }
 
 //ParseNessus File
-func ParseNessus(data []byte) (n *nessus.NessusData, err error) {
-	n, err = nessus.Parse(data)
+func ParseNessus(data []byte) (*nessus.NessusData, error) {
+	n, err := nessus.Parse(data)
 	if err != nil {
 		return nil, err
 	} else if n.Report.Name == "" {

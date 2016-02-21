@@ -18,6 +18,11 @@ type Settings struct {
 	Tags      []string
 }
 
+type hostMap struct {
+	Hosts         map[string]bool
+	Vulnerability *lair.Issue
+}
+
 //Project Building
 type Project interface {
 	Build(projectID string, tags []string) (*lair.Project, error)
