@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/b00stfr3ak/drone_operator/drone"
 	"github.com/gorilla/sessions"
@@ -50,7 +52,7 @@ func processFile(settings *drone.Settings, data []byte) error {
 		} else if err != nil {
 			b, err := drone.ParseBurp(data)
 			if err == nil {
-				burp := &drone.Burp{Settings: *settins, Parsed: b}
+				burp := &drone.Burp{Settings: *settings, Parsed: b}
 				project = burp
 			} else if err != nil {
 				log.Println(err)
@@ -81,28 +83,33 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		hostTags = strings.Split(tags, ",")
 	}
 	settings := &drone.Settings{ProjectID: pid, Tags: hostTags}
+	var wg sync.WaitGroup
 	for _, fheaders := range r.MultipartForm.File {
 		for _, header := range fheaders {
-			f, err := header.Open()
-			if err != nil {
-				log.Println("file open error", err)
-				continue
-			}
-			var buff bytes.Buffer
-			buff.ReadFrom(f)
-			f.Close()
-			err = processFile(settings, buff.Bytes())
-			if err != nil {
-				errmsg := fmt.Sprintf("%s: %s", err, header.Filename)
-				log.Println(errmsg)
-				session.AddFlash(errmsg, "alert alert-danger")
-			} else {
-				goodmsg := fmt.Sprintf("Upload Successful %s", header.Filename)
-				log.Println(goodmsg)
-				session.AddFlash(goodmsg, "alert alert-success")
-			}
+			wg.Add(1)
+			go func(header *multipart.FileHeader, w *sync.WaitGroup) {
+				defer w.Done()
+				f, err := header.Open()
+				if err != nil {
+					log.Println("file open error", err)
+				}
+				var buff bytes.Buffer
+				buff.ReadFrom(f)
+				f.Close()
+				err = processFile(settings, buff.Bytes())
+				if err != nil {
+					errmsg := fmt.Sprintf("%s: %s", err, header.Filename)
+					log.Println(errmsg)
+					session.AddFlash(errmsg, "alert alert-danger")
+				} else {
+					goodmsg := fmt.Sprintf("Upload Successful %s", header.Filename)
+					log.Println(goodmsg)
+					session.AddFlash(goodmsg, "alert alert-success")
+				}
+			}(header, &wg)
 		}
 	}
+	wg.Wait()
 	session.Save(r, w)
 	http.Redirect(w, r, "/", 302)
 }
